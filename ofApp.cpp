@@ -6,13 +6,6 @@ void ofApp::setup(){
 	mesh.loadFromOfMesh(vMesh);
 	mesh.computeFaceAreas();
 	mesh.computeEdgeLengths();
-	// = mesh.faceMap.col(1);
-	//const auto edgeCol = mesh.faceMap.transpose();
-	auto cats = mesh.faceMap*mesh.faceMap.transpose();
-	cout << "Nonzeroes " << mesh.faceMap.col(0).coeff(2) << endl;
-	cout << "inner size " << mesh.faceMap.col(0).innerSize() << endl;
-	cout << "outer size " << mesh.faceMap.outerSize() << endl;
-	cout << "end" << endl;
 }
 
 //--------------------------------------------------------------

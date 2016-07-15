@@ -5,8 +5,8 @@
 
 class SimplexMesh {
 public:
-	SparseMatrix edgeMap; //go from edges to vertices, defines orientation of edge, exterior derivative 0 form
-	SparseMatrix faceMap; //go from faces to edges, encodes relative orientation of face to edge, exterior derivative 1 form
+	class NeighborIterator;
+	SparseMatrix faceToEdge, edgeToFace, edgeToVert, vertToEdge; //go from edges to vertices, defines orientation of edge, exterior derivative 0 form
 
 	Eigen::Matrix<Real, 3, Eigen::Dynamic> positions;
 	Vector edgeLengths;
@@ -25,57 +25,79 @@ public:
 	}
 
 	unsigned int getNumVertices() {
-		return edgeMap.cols();
+		return edgeToVert.cols();
 	}
 	unsigned int getNumEdges() {
-		return edgeMap.rows();
+		return edgeToVert.rows();
 	}
 	unsigned int getNumFaces() {
-		return faceMap.rows();
+		return faceToEdge.rows();
 	}
 	void computeEdgeLengths();
 	void computeFaceAreas();
 
 	pair<int, int> getFacesByEdge(unsigned int edge) {
-		auto edgeCol = faceMap.col(edge);
-		int nonZeroes = edgeCol.nonZeros();
-		return make_pair(0, 0);
+		int nonZeroes = edgeToFace.innerNonZeroPtr()[edge];
 
-/*
-if (nonZeroes == 0) {
+		if (nonZeroes == 0) {
 			//error no faces border
 			cerr << "No faces border edge " << edge << endl;
 			return make_pair(-1, -1);
 		}
 		else if (nonZeroes == 1) {
 			//boundary edge
-			for (int k = 0; k<edgeCol.outerSize(); ++k)
-				for (SparseMatrix::InnerIterator it(edgeCol, k); it; ++it)
-				{
+			SparseMatrix::InnerIterator it(edgeToFace, edge);
 
-					it.row();   // row index
-					it.col();   // col index (here it is equal to k)
-					it.index(); // inner index, here it is equal to it.row()
-				}
-			return make_pair(edgeCol.innerNonZeroPtr()[0], -1);
+			return make_pair(it.col(), -1);
 		}
 		else if (nonZeroes == 2) {
-			return make_pair(edgeCol.innerNonZeroPtr()[0], edgeCol.innerNonZeroPtr()[1]);
+			SparseMatrix::InnerIterator it(edgeToFace, edge);
+			int face1 = it.col();
+			++it;
+			return make_pair(face1, it.col());
 		}
 		else {
 			cerr << "More than 2 faces border edge. That's unpossible! " << edge  << endl;
 		}
-		*/
+		
 	}
 
 	pair<int, int> getVerticesByEdge(unsigned int edge) {
-		SparseMatrix edgeCol = edgeMap.row(edge);
-		auto nonZeroes = edgeCol.innerNonZeroPtr();
-		return make_pair(nonZeroes[0], nonZeroes[1]);
+		SparseMatrix::InnerIterator it(edgeToVert, edge);
+		int v1 = it.col();
+		++it;
+		//no error check
+		return make_pair(v1, it.col());
 	}
 
+	template<class OutputIterator>
+	void getEdgesByVertex(unsigned int vert, OutputIterator out) {
+		for (SparseMatrix::InnerIterator it(vertToEdge, vert); it; ++it) {
+			out = it.col();
+		}
+	}
+
+	vector<int> getEdgesByVertex(unsigned int vert) {
+		vector<int> out;
+		getEdgesByVertex(vert, back_inserter(out));
+		return out;
+	}
+
+	tuple<int,int,int> getEdgesByFace(unsigned int face) {
+		SparseMatrix::InnerIterator it(faceToEdge, face);
+		//check for 3 nonZeroes entries
+		int f1 = it.col();
+		++it;
+		int f2 = it.col();
+		++it;
+		return make_tuple(f1, f2, it.col());
+	}
+	NeighborIterator neighborsBegin(unsigned int vert);
+	
 
 	class NeighborIterator{
+		SimplexMesh *mesh;
+	public:
 		unsigned int edge;
 		unsigned int vertex;
 		int prevFace;
@@ -85,16 +107,79 @@ if (nonZeroes == 0) {
 
 			}
 
+			NeighborIterator(SimplexMesh * m, unsigned int v) {
+				centerVertex = v;
+				mesh = m;
+				SparseMatrix::InnerIterator it(mesh->vertToEdge, v);
+				edge = it.col();
+				auto eVerts = mesh->getVerticesByEdge(edge);
+				if (eVerts.first == v) {
+					vertex = eVerts.second;
+				}
+				else {
+					vertex = eVerts.first;
+				}
+				auto eFaces = mesh->getFacesByEdge(edge);
+				prevFace = eFaces.first;
+			}
+
 			friend bool operator== (NeighborIterator const &lhs, NeighborIterator const &rhs) {
 
 			}
 			NeighborIterator& operator++() {
 				//get edge faces
+				auto edgeFaces = mesh->getFacesByEdge(edge);
 				//get face != prevEdge
+				int face = edgeFaces.first;
+				if (face == prevFace) {
+					face = edgeFaces.second;
+				}
 				//get face edges
+				auto faceEdges = mesh->getEdgesByFace(face);
 				//get edge with one pt == center and one pt != vertex
-				//prevFace = face
-				return *this;
+				prevFace = face;
+				int nextEdge = get<0>(faceEdges);
+				if (nextEdge != edge) {
+					auto edgeVerts = mesh->getVerticesByEdge(nextEdge);
+					if (edgeVerts.first == centerVertex) {
+						edge = nextEdge;
+						vertex = edgeVerts.second;
+						return *this;
+					}
+					else if (edgeVerts.second == centerVertex) {
+						edge = nextEdge;
+						vertex = edgeVerts.first;
+						return *this;
+					}
+				}
+				nextEdge = get<1>(faceEdges);
+				if (nextEdge != edge) {
+					auto edgeVerts = mesh->getVerticesByEdge(nextEdge);
+					if (edgeVerts.first == centerVertex) {
+						edge = nextEdge;
+						vertex = edgeVerts.second;
+						return *this;
+					}
+					else if (edgeVerts.second == centerVertex) {
+						edge = nextEdge;
+						vertex = edgeVerts.first;
+						return *this;
+					}
+				}
+				nextEdge = get<2>(faceEdges);
+				if (nextEdge != edge) {
+					auto edgeVerts = mesh->getVerticesByEdge(nextEdge);
+					if (edgeVerts.first == centerVertex) {
+						edge = nextEdge;
+						vertex = edgeVerts.second;
+						return *this;
+					}
+					else if (edgeVerts.second == centerVertex) {
+						edge = nextEdge;
+						vertex = edgeVerts.first;
+						return *this;
+					}
+				}
 			}
 	};
 };	

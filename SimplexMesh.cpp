@@ -37,12 +37,12 @@ void SimplexMesh::loadFromOfMesh(const ofMesh & mesh) {
 			vv.insert(i1, i3) = -numEdges;
 		}
 	}
-	faceMap.resize(numFaces, numEdges);
-	faceMap.reserve(numFaces * 3);
-	edgeMap.resize(numEdges, numVerts);
-	faceMap.setZero();
-	edgeMap.setZero();
-	edgeMap.reserve(numEdges * 2);
+	faceToEdge.resize(numFaces, numEdges);
+	faceToEdge.reserve(numFaces * 3);
+	edgeToVert.resize(numEdges, numVerts);
+	faceToEdge.setZero();
+	edgeToVert.setZero();
+	edgeToVert.reserve(numEdges * 2);
 	//inserts are inefficient
 	for (unsigned int i = 0; i < numFaces * 3;) {
 		unsigned int fIndex = i / 3;
@@ -52,31 +52,32 @@ void SimplexMesh::loadFromOfMesh(const ofMesh & mesh) {
 
 		Real val = vv.coeff(i1, i2);
 		//get sign for relative direction
-		faceMap.insert(fIndex, abs(val) - 1) = (0.0 < val) - (val < 0.0);
+		faceToEdge.insert(fIndex, abs(val) - 1) = (0.0 < val) - (val < 0.0);
 		val = vv.coeff(i2, i3);
-		faceMap.insert(fIndex, abs(val) - 1) = (0.0 < val) - (val < 0.0);
+		faceToEdge.insert(fIndex, abs(val) - 1) = (0.0 < val) - (val < 0.0);
 		val = vv.coeff(i3, i1);
-		faceMap.insert(fIndex, abs(val) - 1) = (0.0 < val) - (val < 0.0);
+		faceToEdge.insert(fIndex, abs(val) - 1) = (0.0 < val) - (val < 0.0);
 	}
 
 	for (int k = 0; k < vv.outerSize(); ++k) {
 		for (SparseMatrix::InnerIterator it(vv, k); it; ++it) {
 			if (it.value() > 0) {
-				edgeMap.insert(it.value()-1, it.row()) = -1;
-				edgeMap.insert(it.value() - 1, it.col()) = -1;
+				edgeToVert.insert(it.value()-1, it.row()) = -1;
+				edgeToVert.insert(it.value() - 1, it.col()) = -1;
 			}
 		}
 	}
-	faceMap.makeCompressed();
-	edgeMap.makeCompressed();
-
+	faceToEdge.makeCompressed();
+	edgeToVert.makeCompressed();
+	edgeToFace = faceToEdge.transpose();
+	vertToEdge = edgeToVert.transpose();
 }
 
 void SimplexMesh::computeFaceAreas() {
 	faceAreas.resize(getNumFaces());
 
 	//cache this?
-	SparseMatrix fToV = faceMap.cwiseAbs()*edgeMap.cwiseAbs()*0.5;
+	SparseMatrix fToV = faceToEdge.cwiseAbs()*edgeToVert.cwiseAbs()*0.5;
 	if (!fToV.isCompressed()) fToV.makeCompressed();
 	for (int k = 0; k < fToV.outerSize(); ++k) {
 		auto inner = fToV.innerVector(k);
@@ -104,12 +105,17 @@ void SimplexMesh::computeFaceAreas() {
 void SimplexMesh::computeEdgeLengths() {
 	edgeLengths.resize(getNumEdges());
 
-	for (int k = 0; k < edgeMap.outerSize(); ++k) {
-		SparseMatrix::InnerIterator it(edgeMap, k);
+	for (int k = 0; k < edgeToVert.outerSize(); ++k) {
+		SparseMatrix::InnerIterator it(edgeToVert, k);
 
 		Vector3 p1 = getVertex(it.col());
 		++it;
 		Vector3 p2 = getVertex(it.col());
 		edgeLengths[k] = (p2 - p1).norm();
 	}
+}
+
+SimplexMesh::NeighborIterator SimplexMesh::neighborsBegin(unsigned int v) {
+	NeighborIterator it(this, v);
+	return it;
 }
