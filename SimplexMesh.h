@@ -9,9 +9,9 @@ public:
 	SparseMatrix faceToEdge, edgeToFace, edgeToVert, vertToEdge; //go from edges to vertices, defines orientation of edge, exterior derivative 0 form
 
 	Eigen::Matrix<Real, 3, Eigen::Dynamic> positions;
+	Eigen::Matrix<Real, 3, Eigen::Dynamic> normals;
 	Vector edgeLengths;
 	Vector faceAreas;
-	Vector normals;
 
 	void loadFromOfMesh(const ofMesh & mesh);
 
@@ -35,6 +35,12 @@ public:
 	}
 	void computeEdgeLengths();
 	void computeFaceAreas();
+	Real edgeAngle(unsigned int edge);
+	Real cotan(unsigned int edge, unsigned int face);
+	Vector3 normal(unsigned int face);
+	SparseMatrix laplacian();
+	SparseMatrix hodgeStar0();
+	SparseMatrix hodgeStar1();
 
 	pair<int, int> getFacesByEdge(unsigned int edge) {
 		int nonZeroes = edgeToFace.innerNonZeroPtr()[edge];
