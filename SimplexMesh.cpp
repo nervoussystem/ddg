@@ -77,16 +77,16 @@ void SimplexMesh::computeFaceAreas() {
 	faceAreas.resize(getNumFaces());
 
 	//cache this?
-	SparseMatrix fToV = faceToEdge.cwiseAbs()*edgeToVert.cwiseAbs()*0.5;
-	if (!fToV.isCompressed()) fToV.makeCompressed();
-	for (int k = 0; k < fToV.outerSize(); ++k) {
-		auto inner = fToV.innerVector(k);
+	faceToVertex = faceToEdge.cwiseAbs()*edgeToVert.cwiseAbs()*0.5;
+	if (!faceToVertex.isCompressed()) faceToVertex.makeCompressed();
+	for (int k = 0; k < faceToVertex.outerSize(); ++k) {
+		auto inner = faceToVertex.innerVector(k);
 		if (inner.nonZeros() != 3) {
 			cout << "Error: face vertices != 3" << endl;
 			continue;
 		}
 
-		SparseMatrix::InnerIterator it(fToV, k);
+		SparseMatrix::InnerIterator it(faceToVertex, k);
 
 		Vector3 p1 = getVertex(it.col());
 		++it;
@@ -113,6 +113,57 @@ void SimplexMesh::computeEdgeLengths() {
 		Vector3 p2 = getVertex(it.col());
 		edgeLengths[k] = (p2 - p1).norm();
 	}
+}
+
+Real SimplexMesh::edgeAngle(unsigned int edge) {
+	SparseMatrix::InnerIterator it(edgeToFace, edge);
+	Vector3 n1 = normals.col(it.col());
+	++it;
+	Vector3 n2 = normals.col(it.col());
+	Real cosA = n1.dot(n2);
+	//oops that's not right I need to sin too
+	return acos(cosA);
+}
+
+Real SimplexMesh::cotan(unsigned int edge, unsigned int face) {
+	//faceToVertex.row(face).eval().indices();
+	int* edgeI = edgeToVert.row(edge).innerIndexPtr();
+	int* faceI = faceToVertex.row(face).innerIndexPtr();
+	int indexE = edgeI[0];
+	int indexF = faceI[0];
+	int i = 0, j = 0;
+	int opposite = faceI[0];
+	if (edgeI[0] == faceI[0]) {
+		if (edgeI[1] == faceI[1]) {
+			opposite = faceI[2];
+		}
+		else {
+			opposite = faceI[1];
+		}
+	}
+	Vector3 v1 = getVertex(edgeI[0]) - getVertex(opposite);
+	Vector3 v2 = getVertex(edgeI[1]) - getVertex(opposite);
+	Real cosA = v1.dot(v2);
+	Real cot = cosA / faceAreas(face); //cos*e1*e2/(sin*e1*e2)
+
+	return cot;
+
+}
+
+Vector3 SimplexMesh::normal(unsigned int face) {
+
+	return Vector3();
+}
+
+SparseMatrix SimplexMesh::laplacian() {
+	return vertToEdge*hodgeStar0()*edgeToVert;
+}
+
+SparseMatrix SimplexMesh::hodgeStar0() {
+	return SparseMatrix();
+}
+SparseMatrix SimplexMesh::hodgeStar1() {
+	return SparseMatrix();
 }
 
 SimplexMesh::NeighborIterator SimplexMesh::neighborsBegin(unsigned int v) {

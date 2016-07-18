@@ -7,6 +7,7 @@ class SimplexMesh {
 public:
 	class NeighborIterator;
 	SparseMatrix faceToEdge, edgeToFace, edgeToVert, vertToEdge; //go from edges to vertices, defines orientation of edge, exterior derivative 0 form
+	SparseMatrix faceToVertex;
 
 	Eigen::Matrix<Real, 3, Eigen::Dynamic> positions;
 	Eigen::Matrix<Real, 3, Eigen::Dynamic> normals;
@@ -43,7 +44,7 @@ public:
 	SparseMatrix hodgeStar1();
 
 	pair<int, int> getFacesByEdge(unsigned int edge) {
-		int nonZeroes = edgeToFace.innerNonZeroPtr()[edge];
+		int nonZeroes = edgeToFace.row(edge).nonZeros();
 
 		if (nonZeroes == 0) {
 			//error no faces border
@@ -74,6 +75,24 @@ public:
 		++it;
 		//no error check
 		return make_pair(v1, it.col());
+	}
+
+	pair<int, int> getVerticesByEdge(unsigned int edge, int dir) {
+		pair<int, int> out;
+		SparseMatrix::InnerIterator it(edgeToVert, edge);
+		int v1 = it.col();
+		
+		++it;
+		if (it.value() == dir) {
+			out.first = v1;
+			out.second = it.col();
+		}
+		else {
+			out.second = v1;
+			out.first = it.col();
+		}
+		//no error check
+		return out;
 	}
 
 	template<class OutputIterator>

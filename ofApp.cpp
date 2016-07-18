@@ -6,6 +6,10 @@ void ofApp::setup(){
 	mesh.loadFromOfMesh(vMesh);
 	mesh.computeFaceAreas();
 	mesh.computeEdgeLengths();
+
+	auto faces = mesh.getFacesByEdge(0);
+	cout << faces.first << " " << faces.second << endl;
+	cout << "cotan " << mesh.cotan(0, 0) << endl;
 }
 
 //--------------------------------------------------------------
